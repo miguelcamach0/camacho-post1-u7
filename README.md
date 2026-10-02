@@ -59,4 +59,4 @@ El paquete `repository` encapsula el acceso a datos mediante Spring Data JPA.
 
 ## Diagrama de estructura de paquetes — Parte 1
 
-![Diagrama de paquetes Parte 1](evidencia/parte-1/Diagrama-paquetes.png)
+![Diagrama de paquetes Parte 1](evidencias/parte-1/Diagrama-paquetes.png)
