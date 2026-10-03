@@ -60,3 +60,54 @@ El paquete `repository` encapsula el acceso a datos mediante Spring Data JPA.
 ## Diagrama de estructura de paquetes — Parte 1
 
 ![Diagrama de paquetes Parte 1](evidencias/parte-1/Diagrama-paquetes.png)
+
+### Punto de decisión 3 — Selección del adaptador activo
+Para seleccionar el proveedor se utilizó @ConditionalOnProperty.
+Ejemplo:
+@ConditionalOnProperty(
+    prefix = "app.pagos",
+    name = "proveedor",
+    havingValue = "pagosudes"
+)
+
+Con esta estrategia únicamente existe en el contexto de Spring la implementación de PasarelaPagoPort correspondiente al proveedor configurado. En consecuencia, MultaService recibe exactamente una implementación del puerto mediante inyección por constructor. Se consideró como alternativa inyectar: Map<String, PasarelaPagoPort> y seleccionar el proveedor en tiempo de ejecución.
+
+Esta alternativa ofrece mayor flexibilidad si la pasarela tuviera que decidirse individualmente para cada transacción. Sin embargo, el requisito indica que cada sede utiliza una pasarela configurada para su despliegue. No se requiere cambiar de proveedor en medio de la ejecución. Usar un Map en este contexto habría trasladado al Service responsabilidades adicionales: conocer nombres o claves de proveedores y ejecutar lógica de selección. Por eso @ConditionalOnProperty representa la solución más acorde con el requerimiento actual.
+
+### Punto de decisión 4 — Diseño del puerto y el tipo de resultado
+PasarelaPagoPort devuelve: ResultadoPago, en lugar de retornar directamente un DTO de PagosUDES o Wompi. Esto es necesario porque las dos APIs externas presentan contratos diferentes. PagosUDES utiliza conceptos como:idTransaccion, estadoTransaccion; mientras Wompi utiliza: reference y status.
+
+Además, Wompi expresa los valores monetarios en centavos. Los adaptadores absorben estas diferencias y las traducen hacia un lenguaje común: 
+
+proveedor
+exitoso
+referenciaExterna
+mensaje
+
+Si PasarelaPagoPort devolviera PagosUdesResponse, entonces el dominio dependería conceptualmente de PagosUDES y WompiAdapter tendría que adaptar artificialmente sus propios conceptos a nombres pertenecientes a otro proveedor.
+
+Por ejemplo, un atributo llamado:
+
+idTransaccion
+
+No sería realmente neutral porque Wompi devuelve una reference. La abstracción referenciaExterna representa mejor el concepto compartido por ambas tecnologías. Gracias a esta decisión es posible incorporar en el futuro:
+
+MercadoPagoAdapter
+PayUAdapter
+StripeAdapter
+
+Sin modificar el contrato utilizado por MultaService, siempre que puedan traducir sus respuestas a ResultadoPago.
+
+### Trade-off considerado — Parte 2
+La incorporación del puerto PasarelaPagoPort y los adaptadores añade más estructura que una implementación puramente en capas. La solución requiere una interfaz adicional, un modelo de resultado neutral, un paquete de dominio y clases adaptadoras específicas. Por tanto, su costo inmediato es un mayor número de archivos, más líneas de código y una arquitectura que exige comprender inversión de dependencias y puertos y adaptadores.
+
+Una alternativa más sencilla habría sido implementar directamente las llamadas a PagosUDES y Wompi desde MultaService, posiblemente mediante un if o switch. Esa opción tendría menos código inicialmente, pero haría que el servicio conociera URLs, formatos HTTP, unidades monetarias y modelos de respuesta propios de cada pasarela. Cada nuevo proveedor aumentaría la cantidad de condiciones y responsabilidades del servicio.
+
+También era posible mantener una arquitectura estrictamente en capas utilizando una interfaz Strategy en service/. Esa alternativa resolvería parte del problema de intercambiabilidad, pero mantendría conceptualmente la integración externa dentro de la capa de aplicación. El puerto escogido expresa de manera más explícita que el núcleo necesita la capacidad de procesar un pago, mientras que la tecnología concreta encargada de realizarlo pertenece a infraestructura.
+
+La solución hexagonal se aplicó exclusivamente al pago, no a toda la aplicación. Migrar MultaRepository, MultaController y el resto del proyecto a una arquitectura hexagonal completa habría introducido complejidad que el alcance actual no justifica.
+
+Si en el futuro terminara el piloto, desapareciera la posibilidad de cambiar de proveedor y la aplicación quedara permanentemente integrada con una sola pasarela extremadamente estable, el equipo podría reconsiderar si mantener toda esta abstracción sigue generando valor. En el escenario actual, donde existen dos contratos externos distintos y se contempla que proveedores puedan agregarse o eliminarse, la separación mediante puerto y adaptadores tiene una justificación concreta.
+
+## Conclusiones
+La actividad permitió comprobar que utilizar patrones arquitectónicos no consiste en migrar todo un sistema a una arquitectura más compleja, sino en identificar dónde existe una necesidad real de separación. La arquitectura en capas resultó suficiente para los casos de uso básicos de multas, mientras que la integración con dos proveedores externos creó una variación tecnológica que justificó introducir un puerto y adaptadores únicamente en la porción de pago. La solución también evidenció la importancia de mantener las reglas del dominio cerca de los objetos que representan y de utilizar la infraestructura para resolver detalles técnicos externos. Finalmente, la decisión arquitectónica se fundamentó en los cambios esperados del sistema y no solamente en la posibilidad técnica de aplicar un patrón.
