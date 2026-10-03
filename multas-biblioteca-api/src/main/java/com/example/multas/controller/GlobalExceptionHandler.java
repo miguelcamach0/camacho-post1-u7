@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.example.multas.domain.PagoRechazadoException;
 import com.example.multas.model.LimiteMultasPendientesException;
 import com.example.multas.model.MultaNotFoundException;
 import com.example.multas.model.MultaYaPagadaException;
@@ -43,13 +44,26 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(PagoRechazadoException.class)
+    @ResponseStatus(HttpStatus.PAYMENT_REQUIRED)
+    public Map<String, String> handlePagoRechazado(
+            PagoRechazadoException ex
+    ) {
+
+        return Map.of(
+                "error",
+                ex.getMessage()
+        );
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Map<String, String> handleValidation(
             MethodArgumentNotValidException ex
     ) {
 
-        Map<String, String> errores = new LinkedHashMap<>();
+        Map<String, String> errores =
+                new LinkedHashMap<>();
 
         ex.getBindingResult()
                 .getFieldErrors()
