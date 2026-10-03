@@ -16,13 +16,17 @@ calculo del monto vive en la propia entidad Multa
 paquetes model/, repository/, service/ y controller/.
 
 ## Parte 2 — Pago en Linea con Dos Pasarelas
-[Documentar aqui la opcion elegida entre A (rama condicional), B
-(Strategy en service/) o C (puerto de dominio con adaptadores) y por
-que. Si se eligio C: domain/port/PasarelaPagoPort y domain/ResultadoPago
-son Java puro; infrastructure/pago/PagosUdesAdapter e
-infrastructure/pago/WompiAdapter traducen cada formato HTTP externo
-al mismo ResultadoPago; se seleccionan por app.pagos.proveedor sin
-tocar MultaController ni el resto de MultaService.]
+Para la incorporación del pago en línea se eligió la **Opción C: Puerto de dominio con dos adaptadores**, aplicando arquitectura hexagonal únicamente en la porción del sistema relacionada con las pasarelas de pago. La decisión se tomó porque PagosUDES y Wompi exponen contratos HTTP diferentes y el sistema debe poder intercambiar el proveedor activo mediante configuración, sin modificar `MultaController` ni la lógica de negocio de `MultaService`. Introducir un puerto de salida permite aislar estas diferencias tecnológicas y mantener al núcleo de la aplicación independiente de los proveedores concretos.
+
+El contrato común se define mediante `domain/port/PasarelaPagoPort`, mientras que `domain/ResultadoPago` representa un resultado neutral para cualquier proveedor. Ambos componentes pertenecen al dominio y están implementados en Java puro, sin dependencias de Spring, `RestTemplate` ni otros clientes HTTP. Las implementaciones concretas se encuentran en la capa de infraestructura:
+
+- `infrastructure/pago/PagosUdesAdapter`: adapta el contrato de PagosUDES, que utiliza `idTransaccion` y `estadoTransaccion`.
+- `infrastructure/pago/WompiAdapter`: adapta el contrato de Wompi, que utiliza `reference`, `status` y requiere enviar el monto en centavos.
+
+Cada adaptador traduce la respuesta específica del proveedor al mismo objeto `ResultadoPago`, evitando que los DTO o conceptos propios de las pasarelas se filtren hacia `MultaService`. La selección del proveedor activo se realiza mediante la propiedad:
+
+**properties**
+**app.pagos.proveedor=pagosudes**
 
 ## Cómo ejecutar
 ```
